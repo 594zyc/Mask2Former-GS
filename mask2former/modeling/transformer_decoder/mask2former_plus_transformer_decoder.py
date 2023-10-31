@@ -205,7 +205,7 @@ class MLP(nn.Module):
 
 
 @TRANSFORMER_DECODER_REGISTRY.register()
-class MultiScaleMaskedTransformerDecoder(nn.Module):
+class MultiScaleMaskedTransformerDecoderPlus(nn.Module):
 
     _version = 2
 
@@ -238,9 +238,11 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
         in_channels,
         mask_classification=True,
         *,
-        num_classes: int,
+        sem_embed_dim: int,
         hidden_dim: int,
         num_queries: int,
+        num_part_queries: int,
+        num_text_queries: int,
         nheads: int,
         dim_feedforward: int,
         dec_layers: int,
@@ -253,9 +255,11 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
         Args:
             in_channels: channels of the input features
             mask_classification: whether to add mask classifier or not
-            num_classes: number of classes
+            sem_embed_dim: dimension of semantic embedding prediction
             hidden_dim: Transformer feature dimension
-            num_queries: number of queries
+            num_queries: number of thing/stuff queries
+            num_part_queries: number of part queries
+            num_text_queries: number of text queries
             nheads: number of heads
             dim_feedforward: feature dimension in feedforward network
             enc_layers: number of Transformer encoder layers
@@ -312,10 +316,19 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
         self.decoder_norm = nn.LayerNorm(hidden_dim)
 
         self.num_queries = num_queries
-        # learnable query features
+        # learnable query features and p.e.
         self.query_feat = nn.Embedding(num_queries, hidden_dim)
-        # learnable query p.e.
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        
+        self.num_part_queries = num_part_queries
+        if num_part_queries > 0:
+            self.part_query_feat = nn.Embedding(num_part_queries, hidden_dim)
+            self.part_query_embed = nn.Embedding(num_part_queries, hidden_dim)
+        
+        self.num_text_queries = num_text_queries
+        if num_text_queries > 0:
+            self.text_query_feat = nn.Embedding(num_text_queries, hidden_dim)
+            self.text_query_embed = nn.Embedding(num_text_queries, hidden_dim)
 
         # level embedding (we always use 3 scales)
         self.num_feature_levels = 3
@@ -330,7 +343,7 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
 
         # output FFNs
         if self.mask_classification:
-            self.class_embed = nn.Linear(hidden_dim, num_classes + 1)
+            self.class_embed = nn.Linear(hidden_dim, sem_embed_dim)
         self.mask_embed = MLP(hidden_dim, hidden_dim, mask_dim, 3)
 
     @classmethod
@@ -339,9 +352,12 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
         ret["in_channels"] = in_channels
         ret["mask_classification"] = mask_classification
         
-        ret["num_classes"] = cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES
+        # ret["num_classes"] = cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES
+        ret["sem_embed_dim"] = cfg.MODEL.MASK_FORMER.SEM_EMBED_DIM
         ret["hidden_dim"] = cfg.MODEL.MASK_FORMER.HIDDEN_DIM
         ret["num_queries"] = cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES
+        ret["num_part_queries"] = cfg.MODEL.MASK_FORMER.NUM_PART_QUERIES
+        ret["num_text_queries"] = cfg.MODEL.MASK_FORMER.NUM_TEXT_QUERIES
         # Transformer parameters:
         ret["nheads"] = cfg.MODEL.MASK_FORMER.NHEADS
         ret["dim_feedforward"] = cfg.MODEL.MASK_FORMER.DIM_FEEDFORWARD
@@ -384,6 +400,16 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
         # QxNxC
         query_embed = self.query_embed.weight.unsqueeze(1).repeat(1, bs, 1)
         output = self.query_feat.weight.unsqueeze(1).repeat(1, bs, 1)
+        if self.num_part_queries > 0:
+            part_query_embed = self.part_query_embed.weight.unsqueeze(1).repeat(1, bs, 1)
+            part_query_feat = self.part_query_feat.weight.unsqueeze(1).repeat(1, bs, 1)
+            query_embed = torch.cat([query_embed, part_query_embed], dim=0)
+            output = torch.cat([output, part_query_feat], dim=0)
+        if self.num_text_queries > 0:
+            text_query_embed = self.text_query_embed.weight.unsqueeze(1).repeat(1, bs, 1)
+            text_query_feat = self.text_query_feat.weight.unsqueeze(1).repeat(1, bs, 1)
+            query_embed = torch.cat([query_embed, text_query_embed], dim=0)
+            output = torch.cat([output, text_query_feat], dim=0)
 
         predictions_class = []
         predictions_mask = []
@@ -426,7 +452,8 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
             'pred_masks': predictions_mask[-1],
             'aux_outputs': self._set_aux_loss(
                 predictions_class if self.mask_classification else None, predictions_mask
-            )
+            ),
+            "transformer_decoder_last_hidden_state": output,
         }
         return out
 

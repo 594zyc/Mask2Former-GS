@@ -3,7 +3,7 @@
 from detectron2.config import CfgNode as CN
 
 
-def add_maskformer2_config(cfg):
+def add_maskformer2_config(cfg, plus=False):
     """
     Add config for MASK_FORMER.
     """
@@ -50,6 +50,14 @@ def add_maskformer2_config(cfg):
     cfg.MODEL.MASK_FORMER.TRANSFORMER_IN_FEATURE = "res5"
     cfg.MODEL.MASK_FORMER.ENFORCE_INPUT_PROJ = False
 
+    cfg.MODEL.MULTI_DATASET_TRAIN = False
+    if plus:
+        cfg.MODEL.MASK_FORMER.NUM_PART_QUERIES = 0
+        cfg.MODEL.MASK_FORMER.NUM_TEXT_QUERIES = 0
+        cfg.MODEL.MASK_FORMER.CLIP = "ViT-L-14-336/openai"
+        cfg.MODEL.MASK_FORMER.SEM_EMBED_DIM = 768
+        cfg.MODEL.MULTI_DATASET_TRAIN = True
+
     # mask_former inference config
     cfg.MODEL.MASK_FORMER.TEST = CN()
     cfg.MODEL.MASK_FORMER.TEST.SEMANTIC_ON = True
@@ -91,7 +99,10 @@ def add_maskformer2_config(cfg):
 
     # NOTE: maskformer2 extra configs
     # transformer module
-    cfg.MODEL.MASK_FORMER.TRANSFORMER_DECODER_NAME = "MultiScaleMaskedTransformerDecoder"
+    if not plus:
+        cfg.MODEL.MASK_FORMER.TRANSFORMER_DECODER_NAME = "MultiScaleMaskedTransformerDecoder"
+    else:
+        cfg.MODEL.MASK_FORMER.TRANSFORMER_DECODER_NAME = "MultiScaleMaskedTransformerDecoderPlus"
 
     # LSJ aug
     cfg.INPUT.IMAGE_SIZE = 1024
@@ -112,3 +123,8 @@ def add_maskformer2_config(cfg):
     # Importance sampling parameter for PointRend point sampling during training. Parametr `beta` in
     # the original paper.
     cfg.MODEL.MASK_FORMER.IMPORTANCE_SAMPLE_RATIO = 0.75
+
+    # wandb
+    cfg.WANDB = CN()
+    cfg.WANDB.PROJECT = "mask2former"
+    cfg.WANDB.NAME = None

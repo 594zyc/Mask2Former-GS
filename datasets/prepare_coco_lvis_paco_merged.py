@@ -165,7 +165,8 @@ if __name__ == "__main__":
             annotations_with_part.extend(part_anns_to_add)
     
 
-    coco_data_no_parts = coco_data.update(
+    coco_data_no_parts = coco_data
+    coco_data_no_parts.update(
         {
             "images": images_no_part,
             "annotations": annotations_no_part,

@@ -5,7 +5,7 @@ import os
 import torch
 from torch import nn
 from torch.nn import functional as F
-
+import open_clip
 from detectron2.config import configurable, get_cfg, CfgNode
 from detectron2.projects.deeplab import add_deeplab_config
 from detectron2.data import MetadataCatalog
@@ -31,6 +31,9 @@ class MaskFormerForLLM(nn.Module):
         cfg,
         backbone: Backbone,
         sem_seg_head: nn.Module,
+        clip_model: nn.Module,
+        clip_tokenizer,
+        sem_embed_dim: int,
         num_queries: int,
         object_mask_threshold: float,
         overlap_threshold: float,
@@ -73,6 +76,9 @@ class MaskFormerForLLM(nn.Module):
         self.cfg = cfg
         self.backbone = backbone
         self.sem_seg_head = sem_seg_head
+        self.clip_model = clip_model
+        self.clip_tokenizer = clip_tokenizer
+        self.sem_embed_dim = sem_embed_dim
         self.num_queries = num_queries
         self.overlap_threshold = overlap_threshold
         self.object_mask_threshold = object_mask_threshold
@@ -92,6 +98,8 @@ class MaskFormerForLLM(nn.Module):
         self.instance_on = instance_on
         self.panoptic_on = panoptic_on
         self.test_topk_per_image = test_topk_per_image
+        self.text_features = None
+        self.classes = None
 
         if not self.semantic_on:
             assert self.sem_seg_postprocess_before_inference
@@ -101,10 +109,24 @@ class MaskFormerForLLM(nn.Module):
         backbone = build_backbone(cfg)
         sem_seg_head = build_sem_seg_head(cfg, backbone.output_shape())
 
+        clip_type, clip_data = cfg.MODEL.MASK_FORMER.CLIP.split("/")
+        clip_model = open_clip.create_model(
+            clip_type, pretrained=clip_data, precision="fp16"
+        )
+        clip_tokenizer = open_clip.get_tokenizer(clip_type)
+        sem_embed_dim = clip_model.token_embedding.weight.data.shape[1]
+        assert sem_embed_dim == cfg.MODEL.MASK_FORMER.SEM_EMBED_DIM, (
+            "Semantic embedding dimension mismatch: "
+            f"got {sem_embed_dim}, expected {cfg.MODEL.MASK_FORMER.SEM_EMBED_DIM}"
+        )
+
         return {
             "cfg": cfg,
             "backbone": backbone,
             "sem_seg_head": sem_seg_head,
+            "clip_model": clip_model,
+            "clip_tokenizer": clip_tokenizer,
+            "sem_embed_dim": sem_embed_dim,
             "num_queries": cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES,
             "object_mask_threshold": cfg.MODEL.MASK_FORMER.TEST.OBJECT_MASK_THRESHOLD,
             "overlap_threshold": cfg.MODEL.MASK_FORMER.TEST.OVERLAP_THRESHOLD,
@@ -127,6 +149,14 @@ class MaskFormerForLLM(nn.Module):
     @property
     def device(self):
         return self.pixel_mean.device
+    
+    @torch.no_grad()
+    def encode_labels(self, classes: list[str]):
+        input_ids = self.clip_tokenizer(classes).to("cuda")
+        text_features = self.clip_model.encode_text(input_ids)
+        text_features /= text_features.norm(dim=-1, keepdim=True)
+        self.text_features = text_features.float()
+        self.classes = classes
     
     @staticmethod
     def get_cfg(
@@ -151,10 +181,14 @@ class MaskFormerForLLM(nn.Module):
         # it sometimes get converted to float so we have to convert it back ..
         # features = {k:v.to(images) for k,v in features.items()}
         outputs = self.sem_seg_head(features)
-
         pred_masks = outputs["pred_masks"]
-        
+
+        scores = None
+        if self.text_features is not None:
+            pred_sem = outputs["pred_logits"]
+            scores =  (outputs["pred_logits"] @ self.text_features.T).softmax(dim=-1)
         # mask_features = outputs["transformer_decoder_last_hidden_state"]
         # mask_features = mask_features.transpose(0, 1)
 
-        return None, pred_masks  # [B,Q,C], [B,Q,H,W]
+
+        return scores, pred_masks  # [B,Q,C], [B,Q,H,W]

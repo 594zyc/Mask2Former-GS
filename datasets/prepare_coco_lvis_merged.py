@@ -53,9 +53,15 @@ def merge_anns(img_info, coco_anns, lvis_anns, new_catetory_to_info, ann_id):
     annotations = []
     for idx, ann in enumerate(coco_anns):
         coco_cat = ann["category_info"]["name"]
-        if does_overlap[idx] or coco_cat in lvis_cats:
+        # if does_overlap[idx] or coco_cat in lvis_cats:
             # remove coco annotations that overlap with lvis annotations,
             # or the category is in lvis annotations
+            # Note: we do not use this because some categories in coco has
+            # a different granularity than lvis. For example, bananas in coco
+            # is normally annotated as a bunch of bananas, while in lvis it is
+            # annotated as individual bananas.
+        if does_overlap[idx]:
+            # remove coco annotations that overlap with lvis annotations
             continue
         ann["category_id"] = new_catetory_to_info[coco_cat]["id"]
         annotations.append(ann)

@@ -169,37 +169,50 @@ class SetCriterion(nn.Module):
         target_masks = target_masks.to(src_masks)
         target_masks = target_masks[tgt_idx]
 
-        # No need to upsample predictions as we are using normalized coordinates :)
-        # N x 1 x H x W
-        src_masks = src_masks[:, None]
-        target_masks = target_masks[:, None]
-
-        with torch.no_grad():
-            # sample point_coords
-            point_coords = get_uncertain_point_coords_with_randomness(
-                src_masks,
-                lambda logits: calculate_uncertainty(logits),
-                self.num_points,
-                self.oversample_ratio,
-                self.importance_sample_ratio,
-            )
-            # get gt labels
-            point_labels = point_sample(
-                target_masks,
-                point_coords,
-                align_corners=False,
-            ).squeeze(1)
-
-        point_logits = point_sample(
-            src_masks,
-            point_coords,
-            align_corners=False,
+        # down sampling target masks
+        tgt_masks = F.interpolate(
+            target_masks[:, None], size=src_masks.shape[-2:], mode="nearest"
         ).squeeze(1)
 
+        src_masks = src_masks.flatten(1)
+        tgt_masks = tgt_masks.flatten(1)
+
         losses = {
-            "loss_mask": sigmoid_ce_loss_jit(point_logits, point_labels, num_masks),
-            "loss_dice": dice_loss_jit(point_logits, point_labels, num_masks),
+            "loss_mask": sigmoid_ce_loss_jit(src_masks, tgt_masks, num_masks),
+            "loss_dice": dice_loss_jit(src_masks, tgt_masks, num_masks),
         }
+
+        # # No need to upsample predictions as we are using normalized coordinates :)
+        # # N x 1 x H x W
+        # src_masks = src_masks[:, None]
+        # target_masks = target_masks[:, None]
+
+        # with torch.no_grad():
+        #     # sample point_coords
+        #     point_coords = get_uncertain_point_coords_with_randomness(
+        #         src_masks,
+        #         lambda logits: calculate_uncertainty(logits),
+        #         self.num_points,
+        #         self.oversample_ratio,
+        #         self.importance_sample_ratio,
+        #     )
+        #     # get gt labels
+        #     point_labels = point_sample(
+        #         target_masks,
+        #         point_coords,
+        #         align_corners=False,
+        #     ).squeeze(1)
+
+        # point_logits = point_sample(
+        #     src_masks,
+        #     point_coords,
+        #     align_corners=False,
+        # ).squeeze(1)
+
+        # losses = {
+        #     "loss_mask": sigmoid_ce_loss_jit(point_logits, point_labels, num_masks),
+        #     "loss_dice": dice_loss_jit(point_logits, point_labels, num_masks),
+        # }
 
         del src_masks
         del target_masks

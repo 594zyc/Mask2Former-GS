@@ -279,6 +279,10 @@ class MaskFormerPlus(nn.Module):
                     summed_losses[loss_name] = loss
                 else:
                     summed_losses[loss_name] += loss
+            
+            if dataset == "entity_train_lr_no_cls":
+                for prefix in ["entity", "part", "text"]:
+                    summed_losses[f"{prefix}_sem_loss"] *= 0.0
             # print(summed_losses)
             # assert set(losses.keys()) == set(self.criterion.weight_dict.keys())
             # for k in list(losses.keys()):

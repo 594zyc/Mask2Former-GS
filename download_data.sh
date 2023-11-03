@@ -1,3 +1,8 @@
+# download pretrained model weights
+CURRENT_DIR=$(pwd)
+aws s3 cp s3://mm-llm-resources/model-artifacts/sg-mllm/model_weights/m2f_weights $CURRENT_DIR/weights --recursive
+
+
 LOCAL_DATA_ROOT=/data
 S3_ROOT=s3://mm-llm-resources/dataset/sgmllm_images
 
@@ -44,5 +49,3 @@ do
     echo "unzip $dir"
     UNZIP_DISABLE_ZIPBOMB_DETECTION=TRUE unzip -q '*.zip'
 done
-
-

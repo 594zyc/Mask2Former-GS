@@ -103,12 +103,15 @@ class HungarianMatcher(nn.Module):
         for b in range(bs):
 
             out_prob = outputs["pred_logits"][b].softmax(-1)  # [num_queries, feature_dim]
-            tgt_ids = targets[b]["labels"]
+            if "labels" in targets[b]:
+                tgt_ids = targets[b]["labels"]
 
-            # Compute the classification cost. Contrary to the loss, we don't use the NLL,
-            # but approximate it in 1 - proba[target class].
-            # The 1 is a constant that doesn't change the matching, it can be ommitted.
-            cost_class = -F.cosine_similarity(tgt_ids[None, :, :], out_prob[:, None, :], dim=-1, eps=1e-5)
+                # Compute the classification cost. Contrary to the loss, we don't use the NLL,
+                # but approximate it in 1 - proba[target class].
+                # The 1 is a constant that doesn't change the matching, it can be ommitted.
+                cost_class = -F.cosine_similarity(tgt_ids[None, :, :], out_prob[:, None, :], dim=-1, eps=1e-5)
+            else:
+                cost_class = 0
             
             out_mask = outputs["pred_masks"][b]  # [num_queries, H_pred, W_pred]
             # gt masks are already padded when preparing target

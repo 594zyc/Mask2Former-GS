@@ -2,7 +2,7 @@ export DETECTRON2_DATASETS=/data-fsx/xiaofeng/sg-mllm
 
 TOTAL_BATCH_SIZE=128 # 8 nodes * 8 gpus * 2 img/gpu
 
-EXP_NAME=swinl-all_data-q200+50+50-res1024-50ep-bs128-steplr-entityonly-nosem
+EXP_NAME=swinl-all_data-q200+0+0-res1024-50ep-bs128-steplr-entityonly-nosem
 python train_net_plus.py \
     --machine-rank $NODE_RANK \
     --num-machines $NUM_NODES  \

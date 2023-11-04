@@ -31,7 +31,7 @@ for dir in \
     Adobe_EntitySeg/images_lr/entity_02_11598.zip \
     Adobe_EntitySeg/images_lr/entity_03_10049.zip \
     VOCdevkit/VOC2012.zip \
-    mhp/LV-MHP-v2/LV-MHP-v2.zip \
+    mhp/LV-MHP-v2.zip \
     textvqa/images.zip
 do
     aws s3 cp $S3_ROOT/$dir $LOCAL_DATA_ROOT/$dir

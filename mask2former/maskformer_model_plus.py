@@ -84,6 +84,11 @@ class MaskFormerPlus(nn.Module):
         self.num_queries = num_queries
         self.num_part_queries = num_part_queries
         self.num_text_queries = num_text_queries
+        self.groups = ["entity"]
+        if self.num_part_queries > 0:
+            self.groups.append("part")
+        if self.num_text_queries > 0:
+            self.groups.append("text")
         self.overlap_threshold = overlap_threshold
         self.object_mask_threshold = object_mask_threshold
         self.metadata = metadata
@@ -141,8 +146,14 @@ class MaskFormerPlus(nn.Module):
             num_points=cfg.MODEL.MASK_FORMER.TRAIN_NUM_POINTS,
         )
 
+        groups = ["entity"]
+        if cfg.MODEL.MASK_FORMER.NUM_PART_QUERIES > 0:
+            groups.append("part")
+        if cfg.MODEL.MASK_FORMER.NUM_TEXT_QUERIES > 0:
+            groups.append("text")
+
         weight_dict = {}
-        for prefix in ["entity", "part", "text"]:
+        for prefix in groups:
             weight_dict.update(
                 {
                     prefix + "_loss_sem": class_weight,
@@ -245,7 +256,7 @@ class MaskFormerPlus(nn.Module):
             # mask classification target
             losses = {}
             # print(batched_inputs[0])
-            for prefix in ["entity", "part", "text"]:
+            for prefix in self.groups:
                 group_outputs = self.get_group_outputs(outputs, prefix)
                 key = prefix + "_instances"
                 gt_instances = [x[key].to(self.device) for x in batched_inputs]
@@ -281,7 +292,7 @@ class MaskFormerPlus(nn.Module):
                     summed_losses[loss_name] += loss
             
             if dataset == "entity_train_lr_no_cls":
-                for prefix in ["entity", "part", "text"]:
+                for prefix in self.groups:
                     summed_losses[f"{prefix}_sem_loss"] *= 0.0
             # print(summed_losses)
             # assert set(losses.keys()) == set(self.criterion.weight_dict.keys())

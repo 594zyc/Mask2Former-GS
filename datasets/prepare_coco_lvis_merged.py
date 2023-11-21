@@ -17,7 +17,7 @@ from PIL import Image
 from pycocotools import mask as mask_utils
 from itertools import groupby
 
-OVERLAP_THRESHOLD = 0.8
+OVERLAP_THRESHOLD = 0.7
 
 def load_json(file_name):
     print("Loading json file: {}".format(file_name))
@@ -30,8 +30,6 @@ lvis_syn_to_coco_cls = {info["synset"]:cat for cat, info in coco_cls_to_lvis.ite
 
 
 def merge_anns(img_info, coco_anns, lvis_anns, new_catetory_to_info, ann_id):
-    if not lvis_anns:
-        return coco_anns, ann_id
     
     # convert lvis masks to the rle format
     img_h, img_w = img_info["height"], img_info["width"]
@@ -42,7 +40,10 @@ def merge_anns(img_info, coco_anns, lvis_anns, new_catetory_to_info, ann_id):
     coco_masks = [c['segmentation'] for c in coco_anns]
     lvis_masks = [c['segmentation'] for c in lvis_anns]
     iou = mask_utils.iou(coco_masks, lvis_masks, [0] * len(lvis_masks))
-    does_overlap = iou.max(axis=1) > OVERLAP_THRESHOLD
+    if lvis_masks:
+        does_overlap = iou.max(axis=1) > OVERLAP_THRESHOLD
+    else:
+        does_overlap = [0] * len(coco_masks)
 
     # get all the category names in lvis anns
     lvis_cats = set()
@@ -64,12 +65,16 @@ def merge_anns(img_info, coco_anns, lvis_anns, new_catetory_to_info, ann_id):
             # remove coco annotations that overlap with lvis annotations
             continue
         ann["category_id"] = new_catetory_to_info[coco_cat]["id"]
+        ann["ori_coco_id"] = ann["id"]
+        ann["id"] = ann_id
+        ann_id += 1
         annotations.append(ann)
     
     # add all annotations from lvis, and update the category and annotation ids
     for ann in lvis_anns:
         cat = get_lvis_category(ann["category_info"])
         ann["category_id"] = new_catetory_to_info[cat]["id"]
+        ann["ori_lvis_id"] = ann["id"]
         ann["id"] = ann_id
         ann_id += 1
     annotations.extend(lvis_anns)
@@ -140,7 +145,12 @@ if __name__ == "__main__":
         # create coco indexes
         coco_img_id_to_info = {}
         for img_info in coco_data["images"]:
+            lvis_img_info = lvis_img_id_to_info.get(img_info["id"], {})
+            for k in lvis_img_info:
+                if k not in img_info:
+                    img_info[k] = lvis_img_info[k]
             coco_img_id_to_info[img_info["id"]] = img_info
+            
         
         coco_category_id_to_info = {}
         for category_info in coco_data["categories"]:
@@ -173,6 +183,7 @@ if __name__ == "__main__":
             new_cat_info = copy.deepcopy(cat_info)
             new_cat_info["ori_coco_id"] = new_cat_info["id"]
             new_cat_info["id"] = len(new_coco_category_to_info)
+            assert cat not in new_coco_category_to_info
             new_coco_category_to_info[cat] = new_cat_info
 
         for cat_info in lvis_category_id_to_info.values():
@@ -198,7 +209,6 @@ if __name__ == "__main__":
                     }
                 )
                 new_coco_category_to_info[cat] = new_cat_info
-
         
         print("Total categories:", len(new_coco_category_to_info))
         print("From both:", len([c for c in new_coco_category_to_info.values() if "ori_coco_id" in c and "ori_lvis_id" in c]))

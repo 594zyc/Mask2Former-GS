@@ -79,12 +79,16 @@ if __name__ == "__main__":
         coco_category_id_to_info[category_info["id"]] = category_info
 
     coco_img_id_to_anns = {}
+    ori_lvis_id_to_ann_id = {}
     for ann in coco_data["annotations"]:
         img_id = ann["image_id"]
         if img_id not in coco_img_id_to_anns:
             coco_img_id_to_anns[img_id] = []
         cat_info = coco_category_id_to_info[ann["category_id"]]
         coco_img_id_to_anns[img_id].append(ann)
+        
+        if "ori_lvis_id" in ann:
+            ori_lvis_id_to_ann_id[ann["ori_lvis_id"]] = ann["id"]
         
     print("Num coco-lvis images:", len(coco_img_id_to_anns))
     print("Num paco images:", len(paco_img_id_to_anns))
@@ -145,12 +149,16 @@ if __name__ == "__main__":
         part_anns_to_add = []
         part_areas_total = 0
         for obj_ann, part_anns in paco_anns:
+            ori_lvis_obj_ann_id = obj_ann["id"]
+            obj_ann_id = ori_lvis_id_to_ann_id[ori_lvis_obj_ann_id]
             for ann in part_anns:
                 old_cat_id = ann["category_id"]
                 paco_cat = paco_category_id_to_info[old_cat_id]["name"]
                 new_cat_id = new_coco_category_to_info[paco_cat]["id"]
                 ann["category_id"] = new_cat_id
+                ann["ori_paco_id"] = ann["id"]
                 ann["id"] = ann_id
+                ann["obj_ann_id"] = obj_ann_id
                 ann_id += 1
                 part_anns_to_add.append(ann)
                 part_areas_total += ann["area"]

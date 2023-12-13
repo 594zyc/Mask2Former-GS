@@ -353,7 +353,10 @@ class MultiScaleMaskedTransformerDecoderPlus(nn.Module):
         ret["mask_classification"] = mask_classification
         
         # ret["num_classes"] = cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES
-        ret["sem_embed_dim"] = cfg.MODEL.MASK_FORMER.SEM_EMBED_DIM
+        if cfg.MODEL.ENTITY_MASK_ONLY:
+            ret["sem_embed_dim"] = 2
+        else:
+            ret["sem_embed_dim"] = cfg.MODEL.MASK_FORMER.SEM_EMBED_DIM
         ret["hidden_dim"] = cfg.MODEL.MASK_FORMER.HIDDEN_DIM
         ret["num_queries"] = cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES
         ret["num_part_queries"] = cfg.MODEL.MASK_FORMER.NUM_PART_QUERIES

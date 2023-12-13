@@ -57,6 +57,7 @@ def add_maskformer2_config(cfg, plus=False):
         cfg.MODEL.MASK_FORMER.CLIP = "ViT-L-14-336/openai"
         cfg.MODEL.MASK_FORMER.SEM_EMBED_DIM = 768
         cfg.MODEL.MULTI_DATASET_TRAIN = True
+        cfg.MODEL.ENTITY_MASK_ONLY = False
 
     # mask_former inference config
     cfg.MODEL.MASK_FORMER.TEST = CN()

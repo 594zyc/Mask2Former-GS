@@ -75,7 +75,7 @@ class HungarianMatcher(nn.Module):
     while the others are un-matched (and thus treated as non-objects).
     """
 
-    def __init__(self, cost_class: float = 1, cost_mask: float = 1, cost_dice: float = 1, num_points: int = 0):
+    def __init__(self, cost_class: float = 1, cost_mask: float = 1, cost_dice: float = 1, num_points: int = 0, class_agnostic_mask: bool = False):
         """Creates the matcher
 
         Params:
@@ -87,6 +87,7 @@ class HungarianMatcher(nn.Module):
         self.cost_class = cost_class
         self.cost_mask = cost_mask
         self.cost_dice = cost_dice
+        self.class_agnostic_mask = class_agnostic_mask
 
         assert cost_class != 0 or cost_mask != 0 or cost_dice != 0, "all costs cant be 0"
 
@@ -109,7 +110,10 @@ class HungarianMatcher(nn.Module):
                 # Compute the classification cost. Contrary to the loss, we don't use the NLL,
                 # but approximate it in 1 - proba[target class].
                 # The 1 is a constant that doesn't change the matching, it can be ommitted.
-                cost_class = -F.cosine_similarity(tgt_ids[None, :, :], out_prob[:, None, :], dim=-1, eps=1e-5)
+                if self.class_agnostic_mask:
+                    cost_class = -out_prob[:, tgt_ids]
+                else:
+                    cost_class = -F.cosine_similarity(tgt_ids[None, :, :], out_prob[:, None, :], dim=-1, eps=1e-5)
             else:
                 cost_class = 0
             

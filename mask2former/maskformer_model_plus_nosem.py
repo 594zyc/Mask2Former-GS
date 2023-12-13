@@ -125,6 +125,7 @@ class MaskFormerPlusNoSem(nn.Module):
             cost_mask=mask_weight,
             cost_dice=dice_weight,
             num_points=cfg.MODEL.MASK_FORMER.TRAIN_NUM_POINTS,
+            class_agnostic_mask=cfg.MODEL.ENTITY_MASK_ONLY,
         )
 
         groups = ["entity"]
@@ -149,10 +150,10 @@ class MaskFormerPlusNoSem(nn.Module):
                 aux_weight_dict.update({k + f"_{i}": v for k, v in weight_dict.items()})
             weight_dict.update(aux_weight_dict)
 
-        losses = ["masks"]
+        losses = ["masks", "labels"]
 
         criterion = SetCriterion(
-            sem_seg_head.num_classes,
+            1, # class-agnostic, sem emb based method does not use this
             matcher=matcher,
             weight_dict=weight_dict,
             eos_coef=no_object_weight,
@@ -369,7 +370,10 @@ class MaskFormerPlusNoSem(nn.Module):
             )
             padded_masks[:, : gt_masks.shape[1], : gt_masks.shape[2]] = gt_masks
 
-            target_dict = {"masks": padded_masks}
+            class_labels = torch.zeros(
+                (gt_masks.shape[0],), dtype=torch.long, device=gt_masks.device
+            )
+            target_dict = {"masks": padded_masks, "labels": class_labels}
             new_targets.append(target_dict)
         return new_targets
 
